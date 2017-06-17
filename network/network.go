@@ -2,6 +2,7 @@ package network
 
 import (
 	"errors"
+	"github.com/vadimlarionov/multilayer-neural-network/utils"
 	"math"
 )
 
@@ -26,7 +27,6 @@ type Neuron struct {
 	weights   []float64
 	bias      float64
 	activator Activator
-	out       float64
 }
 
 func (n *Neuron) Activate(inputs []float64) float64 {
@@ -34,8 +34,15 @@ func (n *Neuron) Activate(inputs []float64) float64 {
 	for i, input := range inputs {
 		value += n.weights[i] * input
 	}
-	n.out = n.activator.activate(value)
-	return n.out
+	return n.activator.activate(value)
+}
+
+func (n *Neuron) updateWeights(learningRate, delta float64, inputs []float64) {
+	deltaBias := delta * learningRate
+	n.bias -= deltaBias
+	for i := range n.weights {
+		n.weights[i] += deltaBias * inputs[i]
+	}
 }
 
 func NewNeuron(numInputs int) *Neuron {
@@ -49,6 +56,18 @@ type Layer struct {
 	neurons []*Neuron
 }
 
+func (l *Layer) Activate(inputs []float64) []float64 {
+	result := make([]float64, len(l.neurons))
+	for i, n := range l.neurons {
+		result[i] = n.Activate(inputs)
+	}
+	return result
+}
+
+func (l *Layer) updateWeights(neuronIndex int, learningRate, delta float64, inputs []float64) {
+	l.neurons[neuronIndex].updateWeights(learningRate, delta, inputs)
+}
+
 func NewLayer(numNeurons, numInputs int) *Layer {
 	l := Layer{}
 	l.neurons = make([]*Neuron, numNeurons)
@@ -59,19 +78,24 @@ func NewLayer(numNeurons, numInputs int) *Layer {
 }
 
 type NeuralNetwork struct {
-	layers []*Layer
+	numInputs  int
+	numOutputs int
+	layers     []*Layer
+}
+
+func (nn *NeuralNetwork) Recognize(inputs []float64) (classNumber int) {
+	result := inputs
+	for _, layer := range nn.layers {
+		result = layer.Activate(result)
+	}
+
+	return utils.IndexMaxElement(result)
 }
 
 type Builder struct {
 	numInputs    int
 	numOutputs   int
 	hiddenLayers []int
-}
-
-func NewBuilder(numInputs, numOutputs int) *Builder {
-	b := Builder{numInputs: numInputs, numOutputs: numOutputs}
-	b.hiddenLayers = make([]int, 0, 10)
-	return &b
 }
 
 func (b *Builder) AddLayer(numNeurons int) *Builder {
@@ -88,7 +112,7 @@ func (b *Builder) Build() (nn *NeuralNetwork, err error) {
 		return nil, errors.New("The number of outputs must have a positive value")
 	}
 
-	nn = &NeuralNetwork{}
+	nn = &NeuralNetwork{numInputs: b.numInputs, numOutputs: b.numOutputs}
 	nn.layers = make([]*Layer, len(b.hiddenLayers)+1)
 
 	numInputs := b.numInputs
@@ -102,4 +126,10 @@ func (b *Builder) Build() (nn *NeuralNetwork, err error) {
 
 	nn.layers[len(b.hiddenLayers)] = NewLayer(b.numOutputs, numInputs)
 	return nn, nil
+}
+
+func NewBuilder(numInputs, numOutputs int) *Builder {
+	b := Builder{numInputs: numInputs, numOutputs: numOutputs}
+	b.hiddenLayers = make([]int, 0, 10)
+	return &b
 }
