@@ -2,8 +2,10 @@ package network
 
 import (
 	"errors"
+	"fmt"
 	"github.com/vadimlarionov/multilayer-neural-network/utils"
 	"math"
+	"math/rand"
 )
 
 type Activator interface {
@@ -25,12 +27,11 @@ func (s *SigmoidActivator) derivative(out float64) float64 {
 
 type Neuron struct {
 	weights   []float64
-	bias      float64
 	activator Activator
 }
 
 func (n *Neuron) Activate(inputs []float64) float64 {
-	value := -n.bias
+	value := n.weights[len(inputs)]
 	for i, input := range inputs {
 		value += n.weights[i] * input
 	}
@@ -38,16 +39,19 @@ func (n *Neuron) Activate(inputs []float64) float64 {
 }
 
 func (n *Neuron) updateWeights(learningRate, delta float64, inputs []float64) {
+	if len(inputs) != len(n.weights)-1 {
+		panic(fmt.Sprintf("len(inputs){%d} != len(n.weights){%d}-1", len(inputs), len(n.weights)))
+	}
 	deltaBias := delta * learningRate
-	n.bias -= deltaBias
-	for i := range n.weights {
+	for i := range inputs {
 		n.weights[i] += deltaBias * inputs[i]
 	}
+	n.weights[len(inputs)] = deltaBias
 }
 
 func NewNeuron(numInputs int) *Neuron {
 	n := Neuron{}
-	n.weights = make([]float64, numInputs)
+	n.weights = make([]float64, numInputs+1)
 	n.activator = &SigmoidActivator{}
 	return &n
 }
@@ -103,7 +107,7 @@ func (b *Builder) AddLayer(numNeurons int) *Builder {
 	return b
 }
 
-func (b *Builder) Build() (nn *NeuralNetwork, err error) {
+func (b *Builder) Build(randomWeights bool) (nn *NeuralNetwork, err error) {
 	if b.numInputs <= 0 {
 		return nil, errors.New("The number of inputs must have a positive value")
 	}
@@ -123,13 +127,28 @@ func (b *Builder) Build() (nn *NeuralNetwork, err error) {
 		nn.layers[i] = NewLayer(numNeurons, numInputs)
 		numInputs = numNeurons
 	}
-
 	nn.layers[len(b.hiddenLayers)] = NewLayer(b.numOutputs, numInputs)
+
+	if randomWeights {
+		setRandomWeights(nn.layers)
+	}
+
 	return nn, nil
+}
+
+func setRandomWeights(layers []*Layer) {
+	rand.Seed(0)
+	for _, l := range layers {
+		for _, n := range l.neurons {
+			for index := range n.weights {
+				n.weights[index] = rand.Float64() / 2
+			}
+		}
+	}
 }
 
 func NewBuilder(numInputs, numOutputs int) *Builder {
 	b := Builder{numInputs: numInputs, numOutputs: numOutputs}
-	b.hiddenLayers = make([]int, 0, 10)
+	b.hiddenLayers = make([]int, 0)
 	return &b
 }

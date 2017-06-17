@@ -60,10 +60,12 @@ func ReadDataset(fileName string, limit int) (data [][]float64, err error) {
 	return data, nil
 }
 
-func Normalize(data [][]float64, maxValue float64) [][]float64 {
+func Normalize(data [][]float64, maxValue float64, testDataset bool) [][]float64 {
 	for _, dataset := range data {
 		for i, value := range dataset {
 			if i != 0 {
+				dataset[i] = value / maxValue
+			} else if testDataset {
 				dataset[i] = value / maxValue
 			}
 		}
